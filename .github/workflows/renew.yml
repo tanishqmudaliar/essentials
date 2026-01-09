@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for keepalive to work
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -29,12 +31,27 @@ jobs:
         env:
           PA_USERNAME: ${{ secrets.PA_USERNAME }}
           PA_PASSWORD: ${{ secrets.PA_PASSWORD }}
-        run: python renew_python_anywhere.py
+        run: python renew_app.py
 
-      # --- KEEP ALIVE SECTION ---
+      # --- KEEP ALIVE SECTION (DIY - No external action needed) ---
       - name: Keep Workflow Alive
-        uses: gautamkrishnar/keepalive-workflow@v2
-        with:
-          # If no commits occur for 50 days, this action will push 
-          # an empty commit to keep the schedule active.
-          time_elapsed: 50
+        run: |
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Get days since last commit
+          LAST_COMMIT=$(git log -1 --format=%ct)
+          CURRENT_TIME=$(date +%s)
+          DAYS_SINCE=$((($CURRENT_TIME - $LAST_COMMIT) / 86400))
+          
+          echo "Days since last commit: $DAYS_SINCE"
+          
+          # If more than 50 days, make a keepalive commit
+          if [ $DAYS_SINCE -gt 50 ]; then
+            echo "Making keepalive commit..."
+            git commit --allow-empty -m "chore: keepalive commit to prevent workflow disable"
+            git push
+          else
+            echo "No keepalive needed yet (threshold: 50 days)"
+          fi
